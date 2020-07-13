@@ -34,7 +34,6 @@ def get_nodes(n):
     n = n.replace('_', ' ')
 
     n = ' '.join(re.split('(\W)', n))
-    n = n.lower()
     n = n.split()
 
     return n
@@ -124,9 +123,7 @@ def get_data_dev_test(file_, train_cat, keep_unseen=False):
 
             surfaces = []
             for l in lexs:
-                l = l.firstChild.nodeValue.strip().lower()
-                new_doc = ' '.join(re.split('(\W)', l))
-                new_doc = ' '.join(new_doc.split())
+                new_doc = l.firstChild.nodeValue.strip()
                 surfaces.append(new_doc)
             datapoints.append((nodes, adj_matrix, surfaces))
 
@@ -151,9 +148,7 @@ def get_data(file_):
         lexs = e.getElementsByTagName('lex')
 
         for l in lexs:
-            l = l.firstChild.nodeValue.strip().lower()
-            new_doc = ' '.join(re.split('(\W)', l))
-            new_doc = ' '.join(new_doc.split())
+            new_doc = l.firstChild.nodeValue.strip()
             datapoints.append((nodes, adj_matrix, new_doc))
             all_tripes.append(triples)
 
@@ -179,7 +174,7 @@ def process_bpe(triples, file_, file_new, file_graph_new):
         nodes_file = []
 
         for e in l:
-            e = e.lower().strip()
+            e = e.strip()
             e_split = e.split()
             e_split = list(filter(None, e_split))
             nodes_file.append((e_split, e))
