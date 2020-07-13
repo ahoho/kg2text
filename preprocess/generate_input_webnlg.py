@@ -10,7 +10,7 @@ folder_preprocessed_files = sys.argv[2]
 if not os.path.exists(folder_preprocessed_files):
     os.makedirs(folder_preprocessed_files)
 
-datasets = ['train', 'dev', 'test']
+datasets = ['train', 'dev', 'test', 'test-unseen']
 
 
 def camel_case_split(identifier):
@@ -102,7 +102,7 @@ def process_triples(mtriples):
     return nodes, adj_matrix, triples
 
 
-def get_data_dev_test(file_, train_cat):
+def get_data_dev_test(file_, train_cat, keep_unseen=False):
 
     datapoints = []
     all_tripes = []
@@ -114,7 +114,7 @@ def get_data_dev_test(file_, train_cat):
         cat = e.getAttribute('category')
         cats.add(cat)
 
-        if cat in train_cat:
+        if cat in train_cat or keep_unseen:
 
             mtriples = e.getElementsByTagName('mtriple')
             nodes, adj_matrix, triples = process_triples(mtriples)
@@ -242,16 +242,19 @@ for d in datasets:
     triples[d] = []
     datapoints = []
     all_cats = set()
-    files = Path(folder_source + d).rglob('*.xml')
+    files = Path(folder_source + d.replace('-unseen', '')).rglob('*.xml')
     for idx, filename in enumerate(files):
         filename = str(filename)
-        if d == 'test' and 'testdata_with_lex.xml' not in filename:
+        if d == 'test' and 'testdata_with_lex' not in filename:
+            continue
+        if d == 'test-unseen' and 'testdata_unseen' not in filename:
             continue
 
         if d == 'train':
             datapoint, cats, tripes = get_data(filename)
         else:
-            datapoint, cats, tripes = get_data_dev_test(filename, train_cat)
+            keep_unseen = d == 'test-unseen'
+            datapoint, cats, tripes = get_data_dev_test(filename, train_cat, keep_unseen)
         all_cats.update(cats)
         datapoints.extend(datapoint)
         triples[d].extend(tripes)
