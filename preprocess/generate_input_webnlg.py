@@ -3,6 +3,9 @@ from xml.dom import minidom
 from pathlib import Path
 import re
 import os
+import json
+
+from transformers import T5Tokenizer
 
 folder_source = sys.argv[1]
 folder_preprocessed_files = sys.argv[2]
@@ -298,23 +301,31 @@ for idx, datapoints in enumerate(dataset_points):
         with open(path + '/' + part + '-surfaces-3.txt', 'w', encoding='utf8') as f:
             f.write('\n'.join(surfaces_3))
 
-num_operations = 2000
-os.system('cat ' + path + '/train-src.txt ' + path + '/train-surfaces.txt > ' +
-          path + '/training_source.txt')
-print('creating bpe codes...')
-os.system('subword-nmt learn-bpe -s ' + str(num_operations) + ' < ' +
-                path + '/training_source.txt > ' + path + '/codes-bpe.txt')
-print('done')
-print('converting files to bpe...')
+print('tokenizing...')
+tokenizer = T5Tokenizer.from_pretrained("t5-small")
 
+with open("../added_tokens.json", "r") as infile:
+    new_tokens = json.load(infile)
+
+tokenizer.add_tokens(list(new_tokens))
 for d in datasets:
     file_pre = path + '/' + d + '-src.txt'
     file_ = path + '/' + d + '-src-bpe.txt'
-    os.system('subword-nmt apply-bpe -c ' + path + '/codes-bpe.txt < ' + file_pre + ' > ' + file_)
+    with open(file_pre, "r") as infile, open(file_, "w") as outfile:
+        for line in infile:
+            tokenized = ' '.join(tokenizer.tokenize(line.strip()))
+            outfile.write(f"{tokenized}\n")
 
     file_pre = path + '/' + d + '-surfaces.txt'
     file_ = path + '/' + d + '-surfaces-bpe.txt'
-    os.system('subword-nmt apply-bpe -c ' + path + '/codes-bpe.txt < ' + file_pre + ' > ' + file_)
+    with open(file_pre, "r") as infile, open(file_, "w") as outfile:
+        for line in infile:
+            tokenized = ' '.join(tokenizer.tokenize(line.strip()))
+            outfile.write(f"{tokenized}\n")
+
+with open(os.path.join(path, "vocab.txt"), "w") as outfile:
+    for token, _ in sorted(tokenizer.get_vocab().items(), key=lambda d: d[1]):
+        outfile.write(f"{token}\n")
 print('done')
 
 for d in datasets:
