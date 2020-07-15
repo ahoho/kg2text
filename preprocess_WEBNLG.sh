@@ -17,6 +17,8 @@ python graph2text/preprocess.py -train_src ${processed_data_folder}/train-nodes.
                        -valid_graph ${processed_data_folder}/dev-graph.txt  \
                        -valid_tgt ${processed_data_folder}/dev-surfaces-bpe.txt \
                        -save_data ${processed_data_folder}/webnlg \
+                       -tgt_vocab ${processed_data_folder}/vocab.txt \
+                       -src_vocab ${processed_data_folder}/vocab.txt \
                        -src_seq_length 10000 \
                        -tgt_seq_length 10000 \
                        -dynamic_dict \
