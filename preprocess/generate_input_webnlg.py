@@ -7,14 +7,6 @@ import json
 
 from transformers import T5Tokenizer
 
-folder_source = sys.argv[1]
-folder_preprocessed_files = sys.argv[2]
-
-if not os.path.exists(folder_preprocessed_files):
-    os.makedirs(folder_preprocessed_files)
-
-datasets = ['train', 'dev', 'test', 'test-unseen']
-
 
 def camel_case_split(identifier):
     matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)', identifier)
@@ -232,106 +224,115 @@ def process_bpe(triples, file_, file_new, file_graph_new):
     f_graph_new.close()
     print('done')
 
+if __name__ == "__main__":
 
-triples = {}
-train_cat = set()
-dataset_points = []
-for d in datasets:
-    triples[d] = []
-    datapoints = []
-    all_cats = set()
-    files = Path(folder_source + d.replace('-unseen', '')).rglob('*.xml')
-    for idx, filename in enumerate(files):
-        filename = str(filename)
-        if d == 'test' and 'testdata_with_lex' not in filename:
-            continue
-        if d == 'test-unseen' and 'testdata_unseen' not in filename:
-            continue
+    folder_source = sys.argv[1]
+    folder_preprocessed_files = sys.argv[2]
 
+    if not os.path.exists(folder_preprocessed_files):
+        os.makedirs(folder_preprocessed_files)
+
+    datasets = ['train', 'dev', 'test', 'test-unseen']
+
+    triples = {}
+    train_cat = set()
+    dataset_points = []
+    for d in datasets:
+        triples[d] = []
+        datapoints = []
+        all_cats = set()
+        files = Path(folder_source + d.replace('-unseen', '')).rglob('*.xml')
+        for idx, filename in enumerate(files):
+            filename = str(filename)
+            if d == 'test' and 'testdata_with_lex' not in filename:
+                continue
+            if d == 'test-unseen' and 'testdata_unseen' not in filename:
+                continue
+
+            if d == 'train':
+                datapoint, cats, tripes = get_data(filename)
+            else:
+                keep_unseen = d == 'test-unseen'
+                datapoint, cats, tripes = get_data_dev_test(filename, train_cat, keep_unseen)
+            all_cats.update(cats)
+            datapoints.extend(datapoint)
+            triples[d].extend(tripes)
         if d == 'train':
-            datapoint, cats, tripes = get_data(filename)
-        else:
-            keep_unseen = d == 'test-unseen'
-            datapoint, cats, tripes = get_data_dev_test(filename, train_cat, keep_unseen)
-        all_cats.update(cats)
-        datapoints.extend(datapoint)
-        triples[d].extend(tripes)
-    if d == 'train':
-        train_cat = all_cats
-    print(d, len(datapoints))
-    print(d, ' -> triples:', len(triples[d]))
-    assert len(datapoints) == len(triples[d])
-    print('number of cats:', len(all_cats))
-    print('cats:', all_cats)
-    dataset_points.append(datapoints)
+            train_cat = all_cats
+        print(d, len(datapoints))
+        print(d, ' -> triples:', len(triples[d]))
+        assert len(datapoints) == len(triples[d])
+        print('number of cats:', len(all_cats))
+        print('cats:', all_cats)
+        dataset_points.append(datapoints)
 
 
-path = folder_preprocessed_files
-for idx, datapoints in enumerate(dataset_points):
+    path = folder_preprocessed_files
+    for idx, datapoints in enumerate(dataset_points):
 
-    part = datasets[idx]
-    nodes = []
-    graphs = []
-    surfaces = []
-    surfaces_2 = []
-    surfaces_3 = []
-    for datapoint in datapoints:
-        nodes.append(' '.join(datapoint[0]))
-        graphs.append(' '.join(datapoint[1]))
+        part = datasets[idx]
+        nodes = []
+        graphs = []
+        surfaces = []
+        surfaces_2 = []
+        surfaces_3 = []
+        for datapoint in datapoints:
+            nodes.append(' '.join(datapoint[0]))
+            graphs.append(' '.join(datapoint[1]))
+            if part != 'train':
+                surfaces.append(datapoint[2][0])
+                if len(datapoint[2]) > 1:
+                    surfaces_2.append(datapoint[2][1])
+                else:
+                    surfaces_2.append('')
+                if len(datapoint[2]) > 2:
+                    surfaces_3.append(datapoint[2][2])
+                else:
+                    surfaces_3.append('')
+            else:
+                surfaces.append(datapoint[2])
+
+        with open(path + '/' + part + '-src.txt', 'w', encoding='utf8') as f:
+            f.write('\n'.join(nodes))
+        with open(path + '/' + part + '-surfaces.txt', 'w', encoding='utf8') as f:
+            f.write('\n'.join(surfaces))
         if part != 'train':
-            surfaces.append(datapoint[2][0])
-            if len(datapoint[2]) > 1:
-                surfaces_2.append(datapoint[2][1])
-            else:
-                surfaces_2.append('')
-            if len(datapoint[2]) > 2:
-                surfaces_3.append(datapoint[2][2])
-            else:
-                surfaces_3.append('')
-        else:
-            surfaces.append(datapoint[2])
+            with open(path + '/' + part + '-surfaces-2.txt', 'w', encoding='utf8') as f:
+                f.write('\n'.join(surfaces_2))
+            with open(path + '/' + part + '-surfaces-3.txt', 'w', encoding='utf8') as f:
+                f.write('\n'.join(surfaces_3))
 
-    with open(path + '/' + part + '-src.txt', 'w', encoding='utf8') as f:
-        f.write('\n'.join(nodes))
-    with open(path + '/' + part + '-surfaces.txt', 'w', encoding='utf8') as f:
-        f.write('\n'.join(surfaces))
-    if part != 'train':
-        with open(path + '/' + part + '-surfaces-2.txt', 'w', encoding='utf8') as f:
-            f.write('\n'.join(surfaces_2))
-        with open(path + '/' + part + '-surfaces-3.txt', 'w', encoding='utf8') as f:
-            f.write('\n'.join(surfaces_3))
+    print('tokenizing...')
+    tokenizer = T5Tokenizer.from_pretrained("t5-small")
 
-print('tokenizing...')
-tokenizer = T5Tokenizer.from_pretrained("t5-small")
+    with open("../added_tokens.json", "r") as infile:
+        new_tokens = json.load(infile)
 
-with open("../added_tokens.json", "r") as infile:
-    new_tokens = json.load(infile)
+    tokenizer.add_tokens(list(new_tokens))
+    for d in datasets:
+        file_pre = path + '/' + d + '-src.txt'
+        file_ = path + '/' + d + '-src-bpe.txt'
+        with open(file_pre, "r") as infile, open(file_, "w") as outfile:
+            for line in infile:
+                tokenized = ' '.join(tokenizer.tokenize(line.strip()))
+                outfile.write(f"{tokenized}\n")
+        
+        file_pre = path + '/' + d + '-surfaces.txt'
+        file_ = path + '/' + d + '-surfaces-bpe.txt'
+        with open(file_pre, "r") as infile, open(file_, "w") as outfile:
+            for line in infile:
+                tokenized = ' '.join(tokenizer.tokenize(line.strip()))
+                outfile.write(f"{tokenized}\n")
 
-tokenizer.add_tokens(list(new_tokens))
-for d in datasets:
-    file_pre = path + '/' + d + '-src.txt'
-    file_ = path + '/' + d + '-src-bpe.txt'
-    with open(file_pre, "r") as infile, open(file_, "w") as outfile:
-        for line in infile:
-            tokenized = ' '.join(tokenizer.tokenize(line.strip()))
-            outfile.write(f"{tokenized}\n")
+    with open(os.path.join(path, "vocab.txt"), "w") as outfile:
+        for token, _ in sorted(tokenizer.get_vocab().items(), key=lambda d: d[1]):
+            outfile.write(f"{token}\n")
+    print('done')
 
-    file_pre = path + '/' + d + '-surfaces.txt'
-    file_ = path + '/' + d + '-surfaces-bpe.txt'
-    with open(file_pre, "r") as infile, open(file_, "w") as outfile:
-        for line in infile:
-            tokenized = ' '.join(tokenizer.tokenize(line.strip()))
-            outfile.write(f"{tokenized}\n")
-
-with open(os.path.join(path, "vocab.txt"), "w") as outfile:
-    for token, _ in sorted(tokenizer.get_vocab().items(), key=lambda d: d[1]):
-        outfile.write(f"{token}\n")
-print('done')
-
-for d in datasets:
-    print('dataset:', d)
-    file_ = path + '/' + d + '-src-bpe.txt'
-    file_new = path + '/' + d + '-nodes.txt'
-    file_graph_new = path + '/' + d + '-graph.txt'
-    process_bpe(triples[d], file_, file_new, file_graph_new)
+    for d in datasets:
+        print('dataset:', d)
+        file_ = path + '/' + d + '-src-bpe.txt'
+        file_new = path + '/' + d + '-nodes.txt'
+        file_graph_new = path + '/' + d + '-graph.txt'
+        process_bpe(triples[d], file_, file_new, file_graph_new)
 
