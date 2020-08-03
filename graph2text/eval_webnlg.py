@@ -26,6 +26,9 @@ if __name__ == "__main__":
     parser.add_argument("--reference_fnames", nargs="+", help="Reference paths")
     parser.add_argument("--eval_only", action="store_true", default=False)
 
+
+    parser.add_argument("--beam_size", default="3")
+
     args = parser.parse_args()
 
     # Evaluate BLEU on all models
@@ -60,7 +63,7 @@ if __name__ == "__main__":
                 '-beam_size', '3',
                 '-share_vocab',
                 '-length_penalty', 'wu',
-                '-alpha', '3',
+                '-alpha', args.beam_size,
                 #'-verbose',
                 '-batch_size', '80',
                 '-gpu', '0'
