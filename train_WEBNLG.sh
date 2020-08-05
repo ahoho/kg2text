@@ -1,16 +1,17 @@
 #!/bin/bash
+output_folder=$1
+GPUID=$2
+graph_encoder=$3
 
-data_prefix='graph2text/data/webnlg/webnlg'
-model_dir='graph2text/data/webnlg_model'
-
-GPUID=$1
-graph_encoder=$2
+data_prefix='../data/webnlg/kg2text/sentencepiece/webnlg'
+model_dir='../models/kg2text/webnlg/'${1}
+mkdir -p ${model_dir}
 
 export CUDA_VISIBLE_DEVICES=${GPUID}
 export OMP_NUM_THREADS=10
-python -u graph2text/train.py \
+/home/alexanderh/miniconda3/envs/kg2text/bin/python -u graph2text/train.py \
                         -data $data_prefix \
-                        -save_model $model_dir$RANDOM \
+                        -save_model $model_dir/$RANDOM/ \
                         -world_size 1 \
                         -gpu_ranks 0 \
                         -save_checkpoint_steps 5000 \
