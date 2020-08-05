@@ -5,7 +5,7 @@ if [ "$#" -lt 1 ]; then
   exit 2
 fi
 
-processed_data_folder='graph2text/data/webnlg2'
+processed_data_folder='../data/webnlg/kg2text/testing'
 mkdir -p ${processed_data_folder}
 
 python preprocess/generate_input_webnlg.py ${1} ${processed_data_folder}

@@ -5,7 +5,7 @@ if [ "$#" -lt 1 ]; then
   exit 2
 fi
 
-processed_data_folder='graph2text/data/agenda'
+processed_data_folder='../data/agenda/kg2text'
 mkdir -p ${processed_data_folder}
 
 python preprocess/generate_input_agenda.py ${1} ${processed_data_folder}
