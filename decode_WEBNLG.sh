@@ -14,7 +14,7 @@ OUTPUT=$5
 export CUDA_VISIBLE_DEVICES=${GPUID}
 export OMP_NUM_THREADS=10
 
-python -u graph2text/translate.py -model ${MODEL} \
+/home/alexanderh/miniconda3/envs/kg2text/bin/python -u graph2text/translate.py -model ${MODEL} \
 -src ${NODES_FILE} \
 -graph ${GRAPH_FILE} \
 -output ${OUTPUT} \
@@ -26,5 +26,6 @@ python -u graph2text/translate.py -model ${MODEL} \
 -batch_size 60 \
 -gpu 0
 
-cat ${OUTPUT} | sed -r 's/(@@ )|(@@ ?$)//g' > "${OUTPUT}_proc.txt"
+#cat ${OUTPUT} | sed -r 's/(@@ )|(@@ ?$)//g' > "${OUTPUT}_proc.txt"
+cat ${OUTPUT} | sed -r 's/ //g' | sed -r 's/▁/ /g' > "${OUTPUT}_proc.txt"
 mv "${OUTPUT}_proc.txt" ${OUTPUT}
