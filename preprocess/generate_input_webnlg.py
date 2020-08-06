@@ -1,3 +1,4 @@
+import argparse
 import sys
 from xml.dom import minidom
 from pathlib import Path
@@ -5,7 +6,7 @@ import re
 import os
 import json
 
-from transformers import T5Tokenizer
+from transformers import AutoTokenizer
 
 
 def camel_case_split(identifier):
@@ -225,12 +226,14 @@ def process_bpe(triples, file_, file_new, file_graph_new):
     print('done')
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("folder_source")
+    parser.add_argument("folder_preprocessed_files")
+    parser.add_argument("--tokenizer_path_or_name")
+    args = parser.parse_args()
 
-    folder_source = sys.argv[1]
-    folder_preprocessed_files = sys.argv[2]
-
-    if not os.path.exists(folder_preprocessed_files):
-        os.makedirs(folder_preprocessed_files)
+    if not os.path.exists(args.folder_preprocessed_files):
+        os.makedirs(args.folder_preprocessed_files)
 
     datasets = ['train', 'dev', 'test', 'test-unseen']
 
@@ -241,7 +244,7 @@ if __name__ == "__main__":
         triples[d] = []
         datapoints = []
         all_cats = set()
-        files = Path(folder_source + d.replace('-unseen', '')).rglob('*.xml')
+        files = Path(args.folder_source + d.replace('-unseen', '')).rglob('*.xml')
         for idx, filename in enumerate(files):
             filename = str(filename)
             if d == 'test' and 'testdata_with_lex' not in filename:
@@ -267,7 +270,7 @@ if __name__ == "__main__":
         dataset_points.append(datapoints)
 
 
-    path = folder_preprocessed_files
+    path = args.folder_preprocessed_files
     for idx, datapoints in enumerate(dataset_points):
 
         part = datasets[idx]
@@ -303,7 +306,7 @@ if __name__ == "__main__":
                 f.write('\n'.join(surfaces_3))
 
     print('tokenizing...')
-    tokenizer = T5Tokenizer.from_pretrained("t5-small")
+    tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path_or_name)
 
     with open("../added_tokens.json", "r") as infile:
         new_tokens = json.load(infile)
