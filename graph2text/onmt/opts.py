@@ -216,6 +216,8 @@ def preprocess_opts(parser):
               help="Path(s) to the training source data")
     group.add('--train_graph', '-train_graph', required=True, nargs='+',
               help="Path(s) to the training source data")
+    group.add('--train_logit_db', '-train_logit_db', nargs='+', default=[None],
+              help="Path(s) to the training logit shelf")
     group.add('--train_tgt', '-train_tgt', required=True, nargs='+',
               help="Path(s) to the training target data")
     group.add('--train_align', '-train_align', nargs='+', default=[None],

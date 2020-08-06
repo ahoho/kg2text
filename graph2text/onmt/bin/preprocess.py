@@ -14,6 +14,7 @@ from onmt.utils.misc import split_corpus
 import onmt.inputters as inputters
 import onmt.opts as opts
 from onmt.utils.parse import ArgumentParser
+from onmt.inputters.vec_dataset import VecDataReaderFromShelf
 from onmt.inputters.inputter import _build_fields_vocab,\
                                     _load_vocab
 
@@ -44,20 +45,28 @@ def check_existing_pt_files(opt, corpus_type, ids, existing_fields):
 
 
 def process_one_shard(corpus_params, params):
-    corpus_type, fields, graph_reader, src_reader, tgt_reader, align_reader, opt,\
+    corpus_type, fields, graph_reader, logit_reader, src_reader, tgt_reader, align_reader, opt,\
          existing_fields, src_vocab, tgt_vocab = corpus_params
-    i, (graph_shard, src_shard, tgt_shard, align_shard, maybe_id, filter_pred) = params
+    i, (graph_shard, logit_shard, src_shard, tgt_shard, align_shard, maybe_id, filter_pred) = params
     # create one counter per shard
     sub_sub_counter = defaultdict(Counter)
     assert len(src_shard) == len(tgt_shard) == len(graph_shard)
+    if logit_shard is not None:
+        assert len(tgt_shard) == len(logit_shard)
     logger.info("Building shard %d." % i)
 
     src_data = {"reader": src_reader, "data": src_shard, "dir": opt.src_dir}
     graph_data = {"reader": graph_reader, "data": graph_shard, "dir": None}
+    logit_data = {"reader": logit_reader, "data": logit_shard, "dir": None}
     tgt_data = {"reader": tgt_reader, "data": tgt_shard, "dir": None}
     align_data = {"reader": align_reader, "data": align_shard, "dir": None}
-    _readers, _data, _dir = inputters.Dataset.config(
-        [('graph', graph_data), ('src', src_data), ('tgt', tgt_data), ('align', align_data)])
+    _readers, _data, _dir = inputters.Dataset.config([
+        ('graph', graph_data),
+        ('logit', logit_data),
+        ('src', src_data),
+        ('tgt', tgt_data),
+        ('align', align_data),
+    ])
 
     dataset = inputters.Dataset(
         fields, readers=_readers, data=_data, dirs=_dir,
@@ -97,7 +106,6 @@ def process_one_shard(corpus_params, params):
                 % (i, shard_base, data_path))
 
     dataset.save(data_path)
-
     del dataset.examples
     gc.collect()
     del dataset
@@ -127,14 +135,16 @@ def maybe_load_vocab(corpus_type, counters, opt):
     return src_vocab, tgt_vocab, existing_fields
 
 
-def build_save_dataset(corpus_type, fields, src_reader, graph_reader, tgt_reader,
-                       align_reader, opt):
+def build_save_dataset(
+    corpus_type, fields, src_reader, graph_reader, logit_reader, tgt_reader, align_reader, opt
+    ):
     assert corpus_type in ['train', 'valid']
 
     if corpus_type == 'train':
         counters = defaultdict(Counter)
         srcs = opt.train_src
         graphs = opt.train_graph
+        logits = opt.train_logit_db
         tgts = opt.train_tgt
         ids = opt.train_ids
         aligns = opt.train_align
@@ -142,6 +152,7 @@ def build_save_dataset(corpus_type, fields, src_reader, graph_reader, tgt_reader
         counters = None
         srcs = [opt.valid_src]
         graphs = [opt.valid_graph]
+        logits = [None]
         tgts = [opt.valid_tgt]
         ids = [None]
         aligns = [opt.valid_align]
@@ -157,12 +168,12 @@ def build_save_dataset(corpus_type, fields, src_reader, graph_reader, tgt_reader
     if existing_shards == ids and not opt.overwrite:
         return
 
-    def shard_iterator(graphs, srcs, tgts, ids, aligns, existing_shards,
+    def shard_iterator(graphs, logits, srcs, tgts, ids, aligns, existing_shards,
                        existing_fields, corpus_type, opt):
         """
         Builds a single iterator yielding every shard of every corpus.
         """
-        for graph, src, tgt, maybe_id, maybe_align in zip(graphs, srcs, tgts, ids, aligns):
+        for graph, logit, src, tgt, maybe_id, maybe_align in zip(graphs, logits, srcs, tgts, ids, aligns):
             if maybe_id in existing_shards:
                 if opt.overwrite:
                     logger.warning("Overwrite shards for corpus {}"
@@ -188,21 +199,24 @@ def build_save_dataset(corpus_type, fields, src_reader, graph_reader, tgt_reader
                 filter_pred = None
             src_shards = split_corpus(src, opt.shard_size)
             graph_shards = split_corpus(graph, opt.shard_size)
+            logit_shards = VecDataReaderFromShelf.split_corpus(logit, opt.shard_size)
             tgt_shards = split_corpus(tgt, opt.shard_size)
             align_shards = split_corpus(maybe_align, opt.shard_size)
-            for i, (gs, ss, ts, a_s) in enumerate(
-                    zip(graph_shards, src_shards, tgt_shards, align_shards)):
-                yield (i, (gs, ss, ts, a_s, maybe_id, filter_pred))
+            for i, (gs, ls, ss, ts, a_s) in enumerate(
+                    zip(graph_shards, logit_shards, src_shards, tgt_shards, align_shards)):
+                yield (i, (gs, ls, ss, ts, a_s, maybe_id, filter_pred))
 
-    shard_iter = shard_iterator(graphs, srcs, tgts, ids, aligns, existing_shards,
+    shard_iter = shard_iterator(graphs, logits, srcs, tgts, ids, aligns, existing_shards,
                                 existing_fields, corpus_type, opt)
 
     with Pool(opt.num_threads) as p:
-        dataset_params = (corpus_type, fields, graph_reader, src_reader, tgt_reader,
+        dataset_params = (corpus_type, fields, graph_reader, logit_reader, src_reader, tgt_reader,
                           align_reader, opt, existing_fields,
                           src_vocab, tgt_vocab)
         func = partial(process_one_shard, dataset_params)
-        for sub_counter in p.imap(func, shard_iter):
+        # Had issues when adding the logits under multiple threads (possible memory error?)
+        func_iter = p.imap(func, shard_iter) if opt.num_threads > 1 else map(func, shard_iter)
+        for sub_counter in func_iter:
             if sub_counter is not None:
                 for key, value in sub_counter.items():
                     counters[key].update(value)
@@ -264,24 +278,28 @@ def preprocess(opt):
         opt.data_type,
         src_nfeats,
         tgt_nfeats,
-        dynamic_dict=opt.dynamic_dict,
+        dynamic_dict=opt.dynamic_dict, # TODO: confirm whether this option is necessary
         with_align=opt.train_align[0] is not None,
         src_truncate=opt.src_seq_length_trunc,
-        tgt_truncate=opt.tgt_seq_length_trunc)
+        tgt_truncate=opt.tgt_seq_length_trunc,
+        #bos='<sent>',
+        #eos='</sent>', # TODO: confirm that this doesn't have negative downstream effects
+    )
 
     src_reader = inputters.str2reader[opt.data_type].from_opt(opt)
     graph_reader = inputters.str2reader["text"].from_opt(opt)
+    logit_reader = VecDataReaderFromShelf.from_opt(opt)
     tgt_reader = inputters.str2reader["text"].from_opt(opt)
     align_reader = inputters.str2reader["text"].from_opt(opt)
 
     logger.info("Building & saving training data...")
     build_save_dataset(
-        'train', fields, src_reader, graph_reader, tgt_reader, align_reader, opt)
+        'train', fields, src_reader, graph_reader, logit_reader, tgt_reader, align_reader, opt)
 
     if opt.valid_src and opt.valid_tgt:
         logger.info("Building & saving validation data...")
         build_save_dataset(
-            'valid', fields, src_reader, graph_reader, tgt_reader, align_reader, opt)
+            'valid', fields, src_reader, graph_reader, logit_reader, tgt_reader, align_reader, opt)
 
 
 def _get_parser():

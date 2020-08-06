@@ -1,6 +1,10 @@
 import os
+import io
+import shelve
+from itertools import islice
 
 import torch
+from torch.nn.utils.rnn import pad_sequence
 from torchtext.data import Field
 
 from onmt.inputters.datareader_base import DataReaderBase
@@ -56,6 +60,44 @@ class VecDataReader(DataReaderBase):
             yield {side: torch.from_numpy(vec),
                    side + "_path": filename, "indices": i}
 
+
+class VecDataReaderFromShelf(VecDataReader):
+    """
+    Read paired logit data from a shelf
+    """
+    @classmethod
+    def split_corpus(cls, db_path, shard_size):
+        """
+        Read the lines from the shelf database
+        TODO: make sure that this remains ordered
+        """
+        if db_path is None:
+            yield None
+        with shelve.open(f"{db_path}/topk", "r") as db:
+            ids = sorted(db.keys(), key=lambda x: int(x))
+            data = [(id, db[id]) for id in ids]
+            if shard_size <= 0:
+                yield data
+            else:
+                while True:
+                    shard = list(islice(data, shard_size))
+                    if not shard:
+                        break
+                    yield shard
+
+    @staticmethod
+    def load_vec(dump):
+        with io.BytesIO(dump) as reader:
+            vec = torch.load(reader)
+        return vec
+        
+    def read(self, vecs, side=None, vec_dir=None):
+        """
+        Convert the bytes to tensors
+        """
+        for i, ex in vecs:
+            logits, indices = self.load_vec(ex)
+            yield {"id": i, "logit_values": logits, "logit_indices": indices}
 
 def vec_sort_key(ex):
     """Sort using the length of the vector sequence."""
@@ -142,6 +184,31 @@ class VecSeqField(Field):
         if self.include_lengths:
             return arr, lengths
         return arr
+
+
+class LogitField(Field):
+    """
+    Sublcass of VecSeqField that accommodates paired batches of logits and indices
+    TODO: currently doesn't support `include_lengths=True`
+    """
+    def pad(self, minibatch):
+        """
+        `Minibatch` is a list of [length x top_k] tensors, this pads to
+        [max_length x batch_size x top_k] or [batch_size x max_length x top_k], 
+        (depending on `self.batch_first`)
+        """
+        assert not self.pad_first and not self.truncate_first \
+            and not self.fix_length and not self.include_lengths and self.sequential
+        padded_batch = pad_sequence(
+            minibatch, batch_first=self.batch_first, padding_value=self.pad_token,
+        )
+        return padded_batch
+
+    def numericalize(self, arr, device=None):
+        var = arr.to(device)
+        if self.sequential:
+            var = var.contiguous() # TODO: check that this is necessary?
+        return var
 
 
 def vec_fields(**kwargs):

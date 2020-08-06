@@ -16,7 +16,7 @@ from torchtext.data.utils import RandomShuffler
 from onmt.inputters.text_dataset import text_fields, node_fields, TextMultiField, GraphField
 from onmt.inputters.image_dataset import image_fields
 from onmt.inputters.audio_dataset import audio_fields
-from onmt.inputters.vec_dataset import vec_fields
+from onmt.inputters.vec_dataset import vec_fields, LogitField
 from onmt.utils.logging import logger
 # backwards compatibility
 from onmt.inputters.text_dataset import _feature_tokenize  # noqa: F401
@@ -164,6 +164,9 @@ def get_fields(
 
     graph_field_kwargs = {"base_name": "graph"}
     fields["graph"] = GraphField(graph_field_kwargs)
+
+    fields["logit_values"] = LogitField()
+    fields["logit_indices"] = LogitField()
 
     indices = Field(use_vocab=False, dtype=torch.long, sequential=False)
     fields["indices"] = indices
