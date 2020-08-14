@@ -16,6 +16,18 @@ import onmt.utils
 from onmt.utils.logging import logger
 
 
+class GeneratorWrapper(object):
+    """
+    From https://github.com/ChenRocks/Distill-BERT-Textgen-ONMT
+    """
+    def __init__(self, proj):
+        self.proj = proj
+
+    def __call__(self, input_):
+        output = self.proj(input_).float()
+        return output
+
+
 def build_trainer(opt, device_id, model, fields, optim, model_saver=None):
     """
     Simplify `Trainer` creation based on user `opt`s*
@@ -32,7 +44,17 @@ def build_trainer(opt, device_id, model, fields, optim, model_saver=None):
     """
 
     tgt_field = dict(fields)["tgt"].base_field
-    train_loss = onmt.utils.loss.build_loss_compute(model, tgt_field, opt)
+    # From https://github.com/ChenRocks/Distill-BERT-Textgen-ONMT
+    if opt.use_kd:
+        padding_idx = tgt_field.vocab.stoi[tgt_field.pad_token]
+        # remove log_softmax in generator
+        generator = GeneratorWrapper(model.generator[0])
+        train_loss = onmt.utils.loss.KDLossCompute(generator,
+                                                       padding_idx,
+                                                       opt.label_smoothing,
+                                                       opt.kd_topk)
+    else:
+        train_loss = onmt.utils.loss.build_loss_compute(model, tgt_field, opt)
     valid_loss = onmt.utils.loss.build_loss_compute(
         model, tgt_field, opt, train=False)
 
@@ -58,19 +80,36 @@ def build_trainer(opt, device_id, model, fields, optim, model_saver=None):
         if opt.early_stopping > 0 else None
 
     report_manager = onmt.utils.build_report_manager(opt, gpu_rank)
-    trainer = onmt.Trainer(model, train_loss, valid_loss, optim, trunc_size,
-                           shard_size, norm_method,
-                           accum_count, accum_steps,
-                           n_gpu, gpu_rank,
-                           gpu_verbose_level, report_manager,
-                           with_align=True if opt.lambda_align > 0 else False,
-                           model_saver=model_saver if gpu_rank == 0 else None,
-                           average_decay=average_decay,
-                           average_every=average_every,
-                           model_dtype=opt.model_dtype,
-                           earlystopper=earlystopper,
-                           dropout=dropout,
-                           dropout_steps=dropout_steps)
+    if opt.use_kd:
+        trainer = KDTrainer(model, train_loss, valid_loss, optim, trunc_size,
+                                shard_size, norm_method,
+                                accum_count, accum_steps,
+                                n_gpu, gpu_rank,
+                                gpu_verbose_level, report_manager,
+                                alpha=opt.kd_alpha, temperature=opt.kd_temperature,
+                                with_align=True if opt.lambda_align > 0 else False,
+                                model_saver=model_saver if gpu_rank == 0 else None,
+                                average_decay=average_decay,
+                                average_every=average_every,
+                                model_dtype=opt.model_dtype,
+                                earlystopper=earlystopper,
+                                dropout=dropout,
+                                dropout_steps=dropout_steps)
+        trainer._debug_fields = fields # TODO: remove this debug line
+    else:
+        trainer = onmt.Trainer(model, train_loss, valid_loss, optim, trunc_size,
+                               shard_size, norm_method,
+                               accum_count, accum_steps,
+                               n_gpu, gpu_rank,
+                               gpu_verbose_level, report_manager,
+                               with_align=True if opt.lambda_align > 0 else False,
+                               model_saver=model_saver if gpu_rank == 0 else None,
+                               average_decay=average_decay,
+                               average_every=average_every,
+                               model_dtype=opt.model_dtype,
+                               earlystopper=earlystopper,
+                               dropout=dropout,
+                               dropout_steps=dropout_steps)
     return trainer
 
 
@@ -462,3 +501,87 @@ class Trainer(object):
             return self.report_manager.report_step(
                 learning_rate, step, train_stats=train_stats,
                 valid_stats=valid_stats)
+
+
+class KDTrainer(Trainer):
+    """
+    Mostly pulled from https://github.com/ChenRocks/Distill-BERT-Textgen-ONMT/,
+    with some modifications to match the different base ONMT version
+
+    Subclass of Trainer modified to accomodate knowledge distillation
+    Args:
+        alpha(float): Weight, between 0 and 1, given to KD portion of loss
+        temporature(float): Softmax temperature use
+    """
+    def __init__(self, *args, **kwargs):
+        self.alpha = kwargs.pop('alpha')
+        self.temperature = kwargs.pop('temperature')
+        super().__init__(*args, **kwargs)
+
+    def _accum_batches(self, iterator):
+        if self.norm_method != "tokens":
+            raise ValueError("KD should use tokens norm_method")
+        return super()._accum_batches(iterator)
+
+    def _gradient_accumulation(self, true_batches, normalization, total_stats,
+                               report_stats):
+        if self.accum_count > 1:
+            self.optim.zero_grad()
+
+        for batch in true_batches:
+            if self.trunc_size:
+                raise ValueError('truncated BPTT not supported')
+
+            src, src_lengths = batch.src if isinstance(batch.src, tuple) \
+                else (batch.src, None)
+            if src_lengths is not None:
+                report_stats.n_src_words += src_lengths.sum().item()
+
+            # BERT knowledge distillation
+
+            # 1. F-prop all but generator.
+            if self.accum_count == 1:
+                self.optim.zero_grad()
+            outputs, attns = self.model(src, batch.tgt, src_lengths,
+                                        bptt=False, batch=batch)
+            # mask select
+            tgt_out = batch.tgt[1:, :, 0]
+
+            # 2. Compute loss.
+            # HACK: this truncation should be done earlier to speed up data loading,
+            # and the `float()` call should be done based on whether the model is fp16 or not
+            batch.logit_values = batch.logit_values[:, :, :self.train_loss.top_k].float()
+            batch.logit_indices = batch.logit_indices[:, :, :self.train_loss.top_k]
+            # NOTE we do not follow OpenNMT loss computation
+            loss, batch_stats = self.train_loss(
+                outputs, batch.logit_values, batch.logit_indices, tgt_out,
+                normalization,
+                self.temperature, self.alpha)
+
+            if loss is not None:
+                self.optim.backward(loss)
+
+            total_stats.update(batch_stats)
+            report_stats.update(batch_stats)
+
+            # 3. Update the parameters and statistics.
+            if self.accum_count == 1:
+                # Multi GPU gradient gather
+                if self.n_gpu > 1:
+                    grads = [p.grad.data for p in self.model.parameters()
+                             if p.requires_grad
+                             and p.grad is not None]
+                    onmt.utils.distributed.all_reduce_and_rescale_tensors(
+                        grads, float(1))
+                self.optim.step()
+
+        # in case of multi step gradient accumulation,
+        # update only after accum batches
+        if self.accum_count > 1:
+            if self.n_gpu > 1:
+                grads = [p.grad.data for p in self.model.parameters()
+                         if p.requires_grad
+                         and p.grad is not None]
+                onmt.utils.distributed.all_reduce_and_rescale_tensors(
+                    grads, float(1))
+            self.optim.step()

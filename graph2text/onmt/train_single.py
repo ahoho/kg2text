@@ -125,8 +125,11 @@ def main(opt, device_id, batch_queue=None, semaphore=None):
 
         train_iter = _train_iter()
 
+    valid_fields = fields.copy()
+    valid_fields.pop("logit_values", None)
+    valid_fields.pop("logit_indices", None)
     valid_iter = build_dataset_iter(
-        "valid", fields, opt, is_train=False)
+        "valid", valid_fields, opt, is_train=False)
 
     if len(opt.gpu_ranks):
         logger.info('Starting training on GPU: %s' % opt.gpu_ranks)

@@ -203,6 +203,17 @@ def model_opts(parser):
               help="For FP16 training, the opt_level to use."
                    "See https://nvidia.github.io/apex/amp.html#opt-levels.")
 
+    # Knowledge-distillation options
+    group = parser.add_argument_group('KD')
+    group.add('--use_kd', '-use_kd', action="store_true",
+              help="Use a knowledge-distillation loss")
+    group.add('--kd_alpha', '-kd_alpha', default=0.5, type=float,
+          help="How much to weight the kd portion of the loss")
+    group.add('--kd_temperature', '-kd_temperature', default=10.0, type=float,
+          help="Softmax temperature")
+    group.add('--kd_topk', '-kd_topk', default=128, type=int,
+          help="Number of tokens to keep in the logits")
+
 
 def preprocess_opts(parser):
     """ Pre-procesing options """
@@ -218,6 +229,8 @@ def preprocess_opts(parser):
               help="Path(s) to the training source data")
     group.add('--train_logit_db', '-train_logit_db', nargs='+', default=[None],
               help="Path(s) to the training logit shelf")
+    group.add('--kd_topk', '-kd_topk', default=128, type=int,
+          help="Number of tokens to keep in the logits")
     group.add('--train_tgt', '-train_tgt', required=True, nargs='+',
               help="Path(s) to the training target data")
     group.add('--train_align', '-train_align', nargs='+', default=[None],
