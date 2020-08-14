@@ -42,9 +42,12 @@ def _dynamic_dict(example, src_field, tgt_field):
     """
 
     src = src_field.tokenize(example["src"])
+
     # make a small vocab containing just the tokens in the source sequence
     unk = src_field.unk_token
     pad = src_field.pad_token
+    
+    Vocab.UNK = unk
     src_ex_vocab = Vocab(Counter(src), specials=[unk, pad])
     unk_idx = src_ex_vocab.stoi[unk]
     # Map source tokens to indices in the dynamic dict.

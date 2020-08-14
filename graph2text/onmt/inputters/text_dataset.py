@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 from functools import partial
+from collections import defaultdict
 
 import six
+import numpy as np
 import torch
 from torchtext.data import Field, RawField
+from torchtext.vocab import Vocab
 
 from onmt.inputters.datareader_base import DataReaderBase
 
@@ -166,6 +169,7 @@ def text_fields(**kwargs):
     Returns:
         TextMultiField
     """
+    Field.vocab_cls = TransformersVocab
 
     n_feats = kwargs["n_feats"]
     include_lengths = kwargs["include_lengths"]
@@ -173,6 +177,7 @@ def text_fields(**kwargs):
     pad = kwargs.get("pad", "<blank>")
     bos = kwargs.get("bos", "<s>")
     eos = kwargs.get("eos", "</s>")
+    unk = kwargs.get("unk", "<unk>")
     truncate = kwargs.get("truncate", None)
     fields_ = []
     feat_delim = u"￨" if n_feats > 0 else None
@@ -186,7 +191,8 @@ def text_fields(**kwargs):
         use_len = i == 0 and include_lengths
         feat = Field(
             init_token=bos, eos_token=eos,
-            pad_token=pad, tokenize=tokenize,
+            pad_token=pad, unk_token=unk, 
+            tokenize=tokenize,
             include_lengths=use_len)
         fields_.append((name, feat))
     assert fields_[0][0] == base_name  # sanity check
@@ -209,6 +215,7 @@ def node_fields(**kwargs):
     Returns:
         TextMultiField
     """
+    Field.vocab_cls = TransformersVocab
 
     n_feats = kwargs["n_feats"]
     include_lengths = kwargs["include_lengths"]
@@ -254,3 +261,54 @@ class GraphField(RawField):
         edges_types = torch.tensor(edges_types, dtype=torch.long)
 
         return edges_index, edges_types
+
+
+class TransformersVocab(Vocab):
+    """
+    Subclass of the used Vocab file that ensures compatibility with the `transformers`
+    tokenizer used in preprocessing.
+    """
+
+    def __init__(
+        self,
+        counter,
+        max_size=None,
+        min_freq=1,
+        specials=None,
+        vectors=None,
+        unk_init=None,
+        vectors_cache=None,
+    ):
+        """
+        Arguments:
+            counter: collections.Counter object maintaining the order found in the file
+        """
+        self.freqs = counter
+
+        self.itos = sorted(counter.keys(), key=lambda k: counter[k], reverse=True)
+        # some sanity checks:
+        # `_load_vocab` sets the counter values to the order of tokens in the file
+        # if this has been compromised, we are in trouble
+        assert(list(counter.keys()) == self.itos)
+        assert(len(np.unique([
+            counter[i] == counter[j] + 1  for i, j in zip(self.itos[:-1], self.itos[1:])
+        ])) == 1) # assert even spacing
+        assert(all(s in self.itos for s in specials))
+
+        try: # bit of a hack
+            self.unk_index = self.itos.index('[UNK]')
+            self.unk_token = '[UNK]'
+        except:
+            self.unk_index = self.itos.index('<unk>')
+            self.unk_token = '<unk>'
+
+        self.stoi = {tok: i for i, tok in enumerate(self.itos)}
+        
+        self.vectors = None
+        if vectors is not None:
+            self.load_vectors(vectors, unk_init=unk_init, cache=vectors_cache)
+        else:
+            assert unk_init is None and vectors_cache is None
+
+    def __getitem__(self, token):
+        return self.stoi.get(token, self.unk_index)

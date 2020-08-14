@@ -290,6 +290,9 @@ def preprocess_opts(parser):
     group.add('--share_vocab', '-share_vocab', action='store_true',
               help="Share source and target vocabulary")
 
+    group.add('--tokenizer_path_or_name', '-tokenizer_path_or_name',
+              help="transformers tokenizer")
+
     # Truncation options, for text corpus
     group = parser.add_argument_group('Pruning')
     group.add('--src_seq_length', '-src_seq_length', type=int, default=50,

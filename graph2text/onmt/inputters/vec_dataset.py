@@ -188,7 +188,7 @@ class VecSeqField(Field):
 
 class LogitField(Field):
     """
-    Sublcass of VecSeqField that accommodates paired batches of logits and indices
+    Subclass of VecSeqField that accommodates paired batches of logits and indices
     TODO: currently doesn't support `include_lengths=True`
     """
     def pad(self, minibatch):
@@ -200,7 +200,7 @@ class LogitField(Field):
         assert not self.pad_first and not self.truncate_first \
             and not self.fix_length and not self.include_lengths and self.sequential
         padded_batch = pad_sequence(
-            minibatch, batch_first=self.batch_first, padding_value=self.pad_token,
+            minibatch, batch_first=self.batch_first, padding_value=0,
         )
         return padded_batch
 

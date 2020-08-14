@@ -1,14 +1,14 @@
 #!/bin/bash
 
 if [ "$#" -lt 1 ]; then
-  echo "./preprocess_WEBNLG.sh <dataset_folder>"
+  echo "./preprocess_WEBNLG.sh <dataset_folder> <tokenizer_path_or_name>"
   exit 2
 fi
 
 processed_data_folder='../data/webnlg/kg2text/testing'
 mkdir -p ${processed_data_folder}
 
-#python preprocess/generate_input_webnlg.py ${1} ${processed_data_folder}
+python preprocess/generate_input_webnlg.py ${1} ${processed_data_folder} --tokenizer_path_or_name ${2}
 
 python graph2text/preprocess.py -train_src ${processed_data_folder}/train-nodes.txt \
                        -train_graph ${processed_data_folder}/train-graph.txt \
@@ -20,6 +20,7 @@ python graph2text/preprocess.py -train_src ${processed_data_folder}/train-nodes.
                        -save_data ${processed_data_folder}/webnlg \
                        -tgt_vocab ${processed_data_folder}/vocab.txt \
                        -src_vocab ${processed_data_folder}/vocab.txt \
+                       -tokenizer_path_or_name ${2} \
                        -src_seq_length 10000 \
                        -tgt_seq_length 10000 \
                        -dynamic_dict \

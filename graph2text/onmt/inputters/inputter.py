@@ -10,7 +10,6 @@ from itertools import chain, cycle
 import torch
 import torchtext.data
 from torchtext.data import Field, RawField, LabelField
-from torchtext.vocab import Vocab
 from torchtext.data.utils import RandomShuffler
 
 from onmt.inputters.text_dataset import text_fields, node_fields, TextMultiField, GraphField
@@ -19,7 +18,7 @@ from onmt.inputters.audio_dataset import audio_fields
 from onmt.inputters.vec_dataset import vec_fields, LogitField
 from onmt.utils.logging import logger
 # backwards compatibility
-from onmt.inputters.text_dataset import _feature_tokenize  # noqa: F401
+from onmt.inputters.text_dataset import _feature_tokenize, TransformersVocab as Vocab  # noqa: F401
 from onmt.inputters.image_dataset import (  # noqa: F401
     batch_img as make_img)
 
@@ -105,6 +104,7 @@ def get_fields(
     pad='<blank>',
     bos='<s>',
     eos='</s>',
+    unk='<unk>',
     dynamic_dict=False,
     with_align=False,
     src_truncate=None,
@@ -143,21 +143,21 @@ def get_fields(
     fields = {}
 
     fields_getters = {"text": text_fields,
-                      "node": node_fields,
+                      "node": node_fields, # NOTE: Never used
                       "img": image_fields,
                       "audio": audio_fields,
                       "vec": vec_fields}
 
     src_field_kwargs = {"n_feats": n_src_feats,
                         "include_lengths": True,
-                        "pad": pad, "bos": None, "eos": None,
+                        "pad": pad, "bos": None, "eos": None, "unk": unk,
                         "truncate": src_truncate,
                         "base_name": "src"}
     fields["src"] = fields_getters[src_data_type](**src_field_kwargs)
 
     tgt_field_kwargs = {"n_feats": n_tgt_feats,
                         "include_lengths": False,
-                        "pad": pad, "bos": bos, "eos": eos,
+                        "pad": pad, "bos": bos, "eos": eos, "unk": unk,
                         "truncate": tgt_truncate,
                         "base_name": "tgt"}
     fields["tgt"] = fields_getters["text"](**tgt_field_kwargs)
@@ -258,9 +258,11 @@ def _old_style_vocab(vocab):
     were saved directly, not the fields themselves, and the fields needed to
     be reconstructed at training and translation time.
     """
-
-    return isinstance(vocab, list) and \
+    is_old = isinstance(vocab, list) and \
         any(isinstance(v[1], Vocab) for v in vocab)
+    if is_old:
+        raise NotImplementedError("Haven't made necessary changes to support this")
+    return is_old
 
 
 def _old_style_nesting(vocab):
@@ -774,7 +776,7 @@ class DatasetLazyIter(object):
         # NOTE: This is causing some issues for consumer/producer,
         # as we may still have some of those examples in some queue
         # cur_dataset.examples = None
-        # gc.collect()
+        # gc.collect()  
         # del cur_dataset
         # gc.collect()
 
