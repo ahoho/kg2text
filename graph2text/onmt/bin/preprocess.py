@@ -9,6 +9,9 @@ import gc
 import torch
 from collections import Counter, defaultdict
 
+from functools import partial
+from multiprocessing import Pool
+
 from onmt.utils.logging import init_logger, logger
 from onmt.utils.misc import split_corpus
 import onmt.inputters as inputters
@@ -18,8 +21,7 @@ from onmt.inputters.vec_dataset import VecDataReaderFromShelf
 from onmt.inputters.inputter import _build_fields_vocab,\
                                     _load_vocab
 
-from functools import partial
-from multiprocessing import Pool
+from transformers import AutoTokenizer
 
 
 def check_existing_pt_files(opt, corpus_type, ids, existing_fields):
@@ -273,6 +275,10 @@ def preprocess(opt):
     logger.info(" * number of source features: %d." % src_nfeats)
     logger.info(" * number of target features: %d." % tgt_nfeats)
 
+    # NOTE: for some reason, `from_pretrained` isn't loading things saved with 
+    # `save_pretrained`, so need to use the original model
+    tokenizer = AutoTokenizer.from_pretrained(opt.tokenizer_path_or_name)
+
     logger.info("Building `Fields` object...")
     fields = inputters.get_fields(
         opt.data_type,
@@ -282,8 +288,10 @@ def preprocess(opt):
         with_align=opt.train_align[0] is not None,
         src_truncate=opt.src_seq_length_trunc,
         tgt_truncate=opt.tgt_seq_length_trunc,
-        #bos='<sent>',
-        #eos='</sent>', # TODO: confirm that this doesn't have negative downstream effects
+        bos=tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.sep_token, # HACK
+        eos=tokenizer.eos_token if tokenizer.eos_token is not None else tokenizer.cls_token,
+        pad=tokenizer.pad_token,
+        unk=tokenizer.unk_token,
     )
 
     src_reader = inputters.str2reader[opt.data_type].from_opt(opt)

@@ -6,6 +6,8 @@ import sacrebleu
 
 from onmt.bin.translate import translate, _get_parser
 
+from transformers import AutoTokenizer
+
 def natsorted(iterable):
     return sorted(
         iterable,
@@ -19,13 +21,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_fpath", help="File path to saved model(s) (can be a glob)")
     parser.add_argument("--output_dir", help="Where to store outputs")
+    parser.add_argument("--tokenizer_path_or_name", default="")
 
     parser.add_argument("--data_dir", help="Where the data is stored")
     parser.add_argument("--nodes_fname", help="Node filepath")
     parser.add_argument("--graph_fname", help="Graph filepath")
     parser.add_argument("--reference_fnames", nargs="+", help="Reference paths")
     parser.add_argument("--eval_only", action="store_true", default=False)
-
 
     parser.add_argument("--beam_size", default="3")
 
@@ -36,7 +38,15 @@ if __name__ == "__main__":
     references = []
     for reference in args.reference_fnames:
         with open(Path(args.data_dir, reference), "r") as infile:
-            sents = [l.strip() for l in infile]
+            if not args.tokenizer_path_or_name: # this is the default
+                sents = [l.strip() for l in infile]
+            else:
+                tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path_or_name)
+                sents = [" ".join(tokenizer.tokenize(l)) for l in infile]
+                if "t5" in args.tokenizer_path_or_name:
+                    sents = [l.replace(" ", "").replace("▁", " ") for l in sents]
+                if "bert" in args.tokenizer_path_or_name:
+                    sents = [l.replace(" ##", "") for l in sents]
         references.append(sents)
 
     # Decode the sentences
@@ -72,8 +82,12 @@ if __name__ == "__main__":
 
             # detokenize and save
             with open(output_fpath, "r") as infile:
-                #decoded = [re.sub("(@@ )|(@@ ?$)", "", l.strip()) for l in infile]
-                decoded = [l.replace(" ", "").replace("▁", " ").strip() for l in infile]
+                if not args.tokenizer_path_or_name: # this is the default
+                    decoded = [re.sub("(@@ )|(@@ ?$)", "", l.strip()) for l in infile]
+                if "t5" in args.tokenizer_path_or_name:
+                    decoded = [l.replace(" ", "").replace("▁", " ").strip() for l in infile]
+                if "bert" in args.tokenizer_path_or_name:
+                    decoded = [l.replace(" ##", "").strip() for l in infile]
             with open(output_fpath, "w") as outfile:
                 outfile.write("\n".join(decoded))
         else:
