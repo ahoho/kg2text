@@ -129,7 +129,7 @@ def hyper(
     # add slurm-specific items
     slurm_template = hyper_conf["templates"].pop("slurm_header", None)
     if slurm_template:
-        slurm_header = slurm_template.format(n_jobs=len(commands), job_name=job_name)
+        slurm_header = slurm_template.format(n_jobs=len(commands)-1, job_name=job_name)
         commands = [slurm_header] + [
             f"test ${{SLURM_ARRAY_TASK_ID}} -eq {run_id} && {run_command}"
             for run_id, run_command in enumerate(commands)
