@@ -39,4 +39,5 @@ warmup_steps: 8000
 world_size: 1
 gpu_ranks: 0
 
+seed: 11235
 
