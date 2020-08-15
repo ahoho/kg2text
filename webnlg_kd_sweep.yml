@@ -10,7 +10,7 @@ templates:
         #!/bin/bash
         #SBATCH --array=0-{n_jobs}
         #SBATCH --job-name={job_name}
-        #SBATCH --output=sbatch-logs/{job_name}-%K.log
+        #SBATCH --output=sbatch-logs/{job_name}-%A-%a.log
         #SBATCH --gpus-per-node=1
         #SBATCH --gpus=1
         #SBATCH --nodelist=allennlp-server3
