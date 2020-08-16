@@ -8,7 +8,7 @@ templates:
     run_name: "topk_{kd_topk}-alpha_{kd_alpha}-temp_{kd_temperature}-lr_{learning_rate}"
     slurm_header: |
         #!/bin/bash
-        #SBATCH --array=0-{n_jobs}
+        #SBATCH --array=0-{n_jobs}%3
         #SBATCH --job-name={job_name}
         #SBATCH --output=sbatch-logs/{job_name}-%A-%a.log
         #SBATCH --gpus-per-node=1
