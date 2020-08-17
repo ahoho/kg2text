@@ -1,0 +1,43 @@
+decoder_type: transformer
+dec_layers: 4
+enc_layers: 2
+word_vec_size: 256
+enc_rnn_size: 256
+dec_rnn_size: 256
+number_edge_types: 4
+heads: 4
+
+share_decoder_embeddings: true
+share_embeddings: true
+position_encoding: true
+
+label_smoothing: 0.1
+dropout: 0.4
+attention_dropout: 0.1
+
+param_init: 0.0
+param_init_glorot: true
+
+optim: adam
+adam_beta1: 0.9
+adam_beta2: 0.98
+decay_method: noam
+learning_rate: 0.5
+max_grad_norm: 0.0
+max_generator_batches: 100
+
+batch_size: 1024
+batch_type: tokens
+normalization: tokens
+
+save_checkpoint_steps: 5000
+valid_steps: 5000
+report_every: 50
+train_steps: 250000
+warmup_steps: 8000
+
+world_size: 1
+gpu_ranks: 0
+
+seed: 11235
+

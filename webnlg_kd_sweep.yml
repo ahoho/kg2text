@@ -1,0 +1,35 @@
+job_name: "kd-webnlg"
+
+## These will be populated by the code
+# Note the pipe | before `slurm_header` is necessary to parse as separate lines
+templates:
+    command: "/home/alexanderh/miniconda3/envs/kg2text/bin/python graph2text/train.py --config {config_path} --save_model {output_dir}/"
+    # command: "/home/alexanderh/miniconda3/envs/kg2text/bin/python test_slurm.py {output_dir}"
+    run_name: "topk_{kd_topk}-alpha_{kd_alpha}-temp_{kd_temperature}-lr_{learning_rate}"
+    slurm_header: |
+        #!/bin/bash
+        #SBATCH --array=0-{n_jobs}%3
+        #SBATCH --job-name={job_name}
+        #SBATCH --output=sbatch-logs/{job_name}-%A-%a.log
+        #SBATCH --gpus-per-node=1
+        #SBATCH --gpus=1
+        #SBATCH --nodelist=allennlp-server3
+
+
+## Hyperparams
+hyper:
+    kd_topk: [4, 8, 16, 64, 128]
+    kd_alpha: [0.25, 0.5, 0.75, 0.99]
+    kd_temperature: [1, 5, 10, 25]
+    learning_rate: [0.5, 2.0]
+
+# optional scheme for naming the folders (will be random id otherwise)
+
+# defaults
+params:
+    use_kd: true
+    kd_topk: 8
+    kd_alpha: 0.5
+    kd_temperature: 10
+    encoder_type: cge-lw
+    data: /net/nfs2.corp/allennlp/alexanderh/data/webnlg/kg2text/bert-uncased/webnlg
