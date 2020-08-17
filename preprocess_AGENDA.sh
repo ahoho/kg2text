@@ -5,10 +5,10 @@ if [ "$#" -lt 1 ]; then
   exit 2
 fi
 
-processed_data_folder='../data/agenda/kg2text'
+processed_data_folder='../data/agenda/kg2text/bert-uncased'
 mkdir -p ${processed_data_folder}
 
-python preprocess/generate_input_agenda.py ${1} ${processed_data_folder}
+python preprocess/generate_input_agenda.py ${1} ${processed_data_folder} ${2}
 
 python graph2text/preprocess.py -train_src ${processed_data_folder}/training-nodes.txt \
                        -train_graph ${processed_data_folder}/training-graph.txt \
@@ -17,6 +17,8 @@ python graph2text/preprocess.py -train_src ${processed_data_folder}/training-nod
                        -valid_graph ${processed_data_folder}/dev-graph.txt  \
                        -valid_tgt ${processed_data_folder}/dev-surface.txt \
                        -save_data ${processed_data_folder}/agenda \
+                       -tgt_vocab ${processed_data_folder}/vocab.txt \
+                       -src_vocab ${processed_data_folder}/vocab.txt \
                        -src_vocab_size 30000 \
                        -tgt_vocab_size 30000 \
                        -src_seq_length 10000 \

@@ -9,6 +9,8 @@ import json
 import os
 from collections import Counter
 
+from transformers import AutoTokenizer
+
 if sys.version_info[0] < 3:
     raise Exception("Python 3 or a more recent version is required.")
 
@@ -53,7 +55,7 @@ def process_data(relations):
     return edges
 
 
-def read_dataset(file_, part):
+def read_dataset(file_, part, lowercase=False):
     print(file_)
     with open(file_, 'r', encoding="utf-8") as dataset_file:
         data = json.load(dataset_file)
@@ -66,19 +68,27 @@ def read_dataset(file_, part):
         map = {}
 
         src = []
-        title = point['title'].lower().strip().split()
+        title = point['title']
+        if lowercase:
+            title = title.lower()
+        title = title.strip().split()
 
         src.append('<title>')
         for t in title:
             src.append(t)
         src.append('</title>')
 
-        surfaces = point['abstract_og'].lower().strip().split()
+        surfaces = point['abstract_og']
+        if lowercase:
+            surfaces = surfaces.lower()
+        surfaces = point['abstract_og'].strip().split()
 
         for idx_e, e in enumerate(point['entities']):
             map[e] = []
             src.append('<entity>')
-            for ee in e.lower().strip().split():
+            if lowercase:
+                e = e.lower()
+            for ee in e.strip().split():
                 src.append(ee)
                 map[e].append([len(src) - 1, ee])
             src.append('</entity>')
@@ -246,7 +256,7 @@ def create_files(data, part, path, bpe=None):
             f.write('\n'.join(surfaces))
 
 
-def input_files(path_dataset, processed_data_folder):
+def input_files(path_dataset, processed_data_folder, tokenizer_path_or_name):
     """
     Read the corpus, write train and dev files.
     :param path: directory with the AMR json files
@@ -266,27 +276,33 @@ def input_files(path_dataset, processed_data_folder):
         create_files(data, part, processed_data_folder)
         print('Done')
 
-    num_operations = 20000
-    os.system('cat ' + processed_data_folder + '/training-src.txt ' + processed_data_folder + '/training-tgt.txt > ' +
-              processed_data_folder + '/training_source.txt')
-    print('criating bpe codes...')
-    os.system('subword-nmt learn-bpe -s ' + str(num_operations) + ' < ' +
-                    processed_data_folder + '/training_source.txt > ' + processed_data_folder + '/codes-bpe.txt')
-    print('done')
-    print('converting files to bpe...')
+    print('tokenizing...')
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path_or_name)
+
+    with open("../added_tokens.json", "r") as infile:
+        new_tokens = json.load(infile)
+
+    tokenizer.add_tokens(list(new_tokens))
+
     for part in parts:
         print(part)
         file_pre = processed_data_folder + '/' + part + '-src.txt'
         file_ = processed_data_folder + '/' + part + '-src-bpe.txt'
-        os.system('subword-nmt apply-bpe -c ' + processed_data_folder +
-                  '/codes-bpe.txt < ' + file_pre + ' > ' + file_)
+        with open(file_pre, "r") as infile, open(file_, "w") as outfile:
+            for line in infile:
+                tokenized = ' '.join(tokenizer.tokenize(line.strip()))
+                outfile.write(f"{tokenized}\n")
 
         file_pre = processed_data_folder + '/' + part + '-tgt.txt'
         file_ = processed_data_folder + '/' + part + '-tgt-bpe.txt'
-        os.system('subword-nmt apply-bpe -c ' + processed_data_folder +
-                  '/codes-bpe.txt < ' + file_pre + ' > ' + file_)
-
-    print('done')
+        with open(file_pre, "r") as infile, open(file_, "w") as outfile:
+            for line in infile:
+                tokenized = ' '.join(tokenizer.tokenize(line.strip()))
+                outfile.write(f"{tokenized}\n")
+    
+    with open(os.path.join(path, "vocab.txt"), "w") as outfile:
+        for token, _ in sorted(tokenizer.get_vocab().items(), key=lambda d: d[1]):
+            outfile.write(f"{token}\n")
 
     for part in parts:
         file_ = path_dataset + '/unprocessed.' + part + '.json'
@@ -302,9 +318,9 @@ def input_files(path_dataset, processed_data_folder):
     print('Files necessary for training/evaluating/test are written on disc.')
 
 
-def main(path_dataset, processed_data_folder):
+def main(path_dataset, processed_data_folder, tokenizer_path_or_name):
 
-    input_files(path_dataset, processed_data_folder)
+    input_files(path_dataset, processed_data_folder, tokenizer_path_or_name)
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], sys.argv[3])
