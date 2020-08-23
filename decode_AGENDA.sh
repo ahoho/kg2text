@@ -1,17 +1,15 @@
 #!/bin/bash
 
-if [ "$#" -lt 5 ]; then
-  echo "./decode_AGENDA.sh <gpuid> <model> <nodes-file> <graph-file> <output>"
+if [ "$#" -lt 4 ]; then
+  echo "./decode_AGENDA.sh <model> <nodes-file> <graph-file> <output>"
   exit 2
 fi
 
-GPUID=$1
-MODEL=$2
-NODES_FILE=$3
-GRAPH_FILE=$4
-OUTPUT=$5
+MODEL=$1
+NODES_FILE=$2
+GRAPH_FILE=$3
+OUTPUT=$4
 
-export CUDA_VISIBLE_DEVICES=${GPUID}
 export OMP_NUM_THREADS=10
 
 python -u graph2text/translate.py -model ${MODEL} \
