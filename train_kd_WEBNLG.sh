@@ -2,7 +2,7 @@
 output_folder=$1
 graph_encoder=$2
 
-data_prefix='../data/webnlg/kg2text/testing/webnlg'
+data_prefix='../data/webnlg/kg2text/bert-uncased-kd-checkpoint_10000/webnlg'
 model_dir='../models/kg2text/webnlg/'${1}
 mkdir -p ${model_dir}
 
@@ -10,6 +10,8 @@ export OMP_NUM_THREADS=10
 /home/alexanderh/miniconda3/envs/kg2text/bin/python -u graph2text/train.py \
                         -use_kd \
                         -kd_topk 8 \
+                        -kd_temperature 10 \
+                        -kd_alpha 0.1 \
                         -data $data_prefix \
                         -save_model $model_dir/ \
                         -world_size 1 \
@@ -17,7 +19,7 @@ export OMP_NUM_THREADS=10
                         -save_checkpoint_steps 5000 \
                         -valid_steps 5000 \
                         -report_every 50 \
-                        -train_steps 250000 \
+                        -train_steps 300000 \
                         -warmup_steps 8000 \
                         --share_decoder_embeddings \
                         -share_embeddings \
@@ -26,7 +28,7 @@ export OMP_NUM_THREADS=10
                         -adam_beta1 0.9 \
                         -adam_beta2 0.98 \
                         -decay_method noam \
-                        -learning_rate 0.5 \
+                        -learning_rate 2 \
                         -max_grad_norm 0.0 \
                         -batch_size 1024 \
                         -batch_type tokens \

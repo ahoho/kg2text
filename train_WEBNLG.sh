@@ -2,8 +2,8 @@
 output_folder=$1
 graph_encoder=$2
 
-data_prefix='../data/webnlg/kg2text/testing/webnlg'
-model_dir='../models/kg2text/webnlg/'${1}
+data_prefix='../data/webnlg/kg2text/bert-uncased/webnlg'
+model_dir='../models/webnlg/kg2text/'${1}
 mkdir -p ${model_dir}
 
 export OMP_NUM_THREADS=10
