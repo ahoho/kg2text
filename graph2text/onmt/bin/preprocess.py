@@ -75,8 +75,15 @@ def process_one_shard(corpus_params, params):
         sort_key=inputters.str2sortkey[opt.data_type],
         filter_pred=filter_pred
     )
+    dropped = 0
+
     if corpus_type == "train" and existing_fields is None:
         for ex in dataset.examples:
+            if getattr(ex, "logit_indices", None) is not None:
+                if ex.logit_indices.shape[0] != len(ex.tgt[0]) + 1:
+                    dropped += 1
+                    continue
+
             for name, field in fields.items():
                 if ((opt.data_type == "audio") and (name == "src")):
                     continue
@@ -106,6 +113,7 @@ def process_one_shard(corpus_params, params):
 
     logger.info(" * saving %sth %s data shard to %s."
                 % (i, shard_base, data_path))
+    logger.info(f"Dropped {dropped} examples due to incompatible logit seq length")
 
     dataset.save(data_path)
     del dataset.examples
@@ -286,6 +294,7 @@ def preprocess(opt):
         tgt_nfeats,
         dynamic_dict=opt.dynamic_dict, # TODO: confirm whether this option is necessary
         with_align=opt.train_align[0] is not None,
+        include_logits=opt.train_logit_db[0] is not None,
         src_truncate=opt.src_seq_length_trunc,
         tgt_truncate=opt.tgt_seq_length_trunc,
         bos=tokenizer.bos_token if tokenizer.bos_token is not None else tokenizer.sep_token, # HACK
