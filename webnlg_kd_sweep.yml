@@ -1,4 +1,4 @@
-job_name: "kd-webnlg"
+job_name: "kd-webnlg-span_mask"
 
 ## These will be populated by the code
 # Note the pipe | before `slurm_header` is necessary to parse as separate lines
@@ -18,9 +18,9 @@ templates:
 
 ## Hyperparams
 hyper:
-    kd_topk: [4, 8, 16, 64, 128]
-    kd_alpha: [0.25, 0.5, 0.75, 0.99]
-    kd_temperature: [1, 5, 10, 25]
+    kd_topk: [8, 16, 64, 128]
+    kd_alpha: [0.1, 0.25, 0.5, 0.75]
+    kd_temperature: [5, 10, 25]
     learning_rate: [0.5, 2.0]
 
 # optional scheme for naming the folders (will be random id otherwise)
@@ -32,4 +32,4 @@ params:
     kd_alpha: 0.5
     kd_temperature: 10
     encoder_type: cge-lw
-    data: /net/nfs2.corp/allennlp/alexanderh/data/webnlg/kg2text/bert-uncased/webnlg
+    data: /net/nfs2.corp/allennlp/alexanderh/data/webnlg/kg2text/span_mask-checkpoint_10000
