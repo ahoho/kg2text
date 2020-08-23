@@ -73,10 +73,10 @@ def read_dataset(file_, part, lowercase=False):
             title = title.lower()
         title = title.strip().split()
 
-        src.append('<title>')
+        src.append('<relation>') # TODO: should be <title>
         for t in title:
             src.append(t)
-        src.append('</title>')
+        src.append('</relation>') # TODO: should be </title>
 
         surfaces = point['abstract_og']
         if lowercase:
@@ -124,8 +124,8 @@ def read_dataset_bpe(file_, path, part):
     titles = []
 
     for l in file_src.readlines():
-        l = l.strip().split('</title>')
-        title = l[0].replace('<title>', '').strip()
+        l = l.strip().split('</relation>') # TODO: should be </title>
+        title = l[0].replace('<relation>', '').strip() # TODO: should be <title>
         titles.append(title.split())
         ent = l[1].split('</entity> <entity>')
         ee = []
@@ -262,7 +262,6 @@ def input_files(path_dataset, processed_data_folder, tokenizer_path_or_name):
     :param path: directory with the AMR json files
     :return:
     """
-
     parts = ['training', 'dev', 'test']
 
     for part in parts:
@@ -300,7 +299,7 @@ def input_files(path_dataset, processed_data_folder, tokenizer_path_or_name):
                 tokenized = ' '.join(tokenizer.tokenize(line.strip()))
                 outfile.write(f"{tokenized}\n")
     
-    with open(os.path.join(path, "vocab.txt"), "w") as outfile:
+    with open(os.path.join(processed_data_folder, "vocab.txt"), "w") as outfile:
         for token, _ in sorted(tokenizer.get_vocab().items(), key=lambda d: d[1]):
             outfile.write(f"{token}\n")
 
