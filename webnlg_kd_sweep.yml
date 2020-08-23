@@ -32,4 +32,4 @@ params:
     kd_alpha: 0.5
     kd_temperature: 10
     encoder_type: cge-lw
-    data: /net/nfs2.corp/allennlp/alexanderh/data/webnlg/kg2text/span_mask-checkpoint_10000
+    data: /net/nfs2.corp/allennlp/alexanderh/data/webnlg/kg2text/span_mask-checkpoint_10000/webnlg
