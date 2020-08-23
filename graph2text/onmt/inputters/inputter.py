@@ -101,6 +101,7 @@ def get_fields(
     src_data_type,
     n_src_feats,
     n_tgt_feats,
+    include_logits=False,
     pad='<blank>',
     bos='<s>',
     eos='</s>',
@@ -165,8 +166,9 @@ def get_fields(
     graph_field_kwargs = {"base_name": "graph"}
     fields["graph"] = GraphField(graph_field_kwargs)
 
-    fields["logit_values"] = LogitField()
-    fields["logit_indices"] = LogitField()
+    if include_logits:
+        fields["logit_values"] = LogitField()
+        fields["logit_indices"] = LogitField()
 
     indices = Field(use_vocab=False, dtype=torch.long, sequential=False)
     fields["indices"] = indices
