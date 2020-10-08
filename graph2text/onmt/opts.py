@@ -422,6 +422,7 @@ def train_opts(parser):
     group.add('--train_from', '-train_from', default='', type=str,
               help="If training from a checkpoint then this is the "
                    "path to the pretrained model's state_dict.")
+    group.add('--train_from_pretrained', '-train_from_pretrained', default='', type=str)
     group.add('--reset_optim', '-reset_optim', default='none',
               choices=['none', 'all', 'states', 'keep_states'],
               help="Optimization resetter when train_from.")
