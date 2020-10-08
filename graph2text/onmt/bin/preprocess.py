@@ -75,15 +75,17 @@ def process_one_shard(corpus_params, params):
         sort_key=inputters.str2sortkey[opt.data_type],
         filter_pred=filter_pred
     )
-    dropped = 0
+
+    n = len(dataset.examples)
+    dataset.examples[:] = [
+        ex for ex in dataset.examples
+        if getattr(ex, "logit_indices", None) is None or ex.logit_indices.shape[0] == len(ex.tgt[0]) + 1
+    ]
+    dropped = n - len(dataset.examples)
+    logger.info(f"Dropped {dropped} examples due to incompatible logit seq length")
 
     if corpus_type == "train" and existing_fields is None:
         for ex in dataset.examples:
-            if getattr(ex, "logit_indices", None) is not None:
-                if ex.logit_indices.shape[0] != len(ex.tgt[0]) + 1:
-                    dropped += 1
-                    continue
-
             for name, field in fields.items():
                 if ((opt.data_type == "audio") and (name == "src")):
                     continue
@@ -104,6 +106,7 @@ def process_one_shard(corpus_params, params):
                             and sub_f.sequential and not has_vocab):
                         val = fd
                         sub_sub_counter[sub_n].update(val)
+
     if maybe_id:
         shard_base = corpus_type + "_" + maybe_id
     else:
@@ -113,7 +116,6 @@ def process_one_shard(corpus_params, params):
 
     logger.info(" * saving %sth %s data shard to %s."
                 % (i, shard_base, data_path))
-    logger.info(f"Dropped {dropped} examples due to incompatible logit seq length")
 
     dataset.save(data_path)
     del dataset.examples
